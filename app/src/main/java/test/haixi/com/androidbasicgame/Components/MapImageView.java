@@ -37,7 +37,7 @@ public class MapImageView extends ImageView{
         windowsHeight = displayMetrics.heightPixels;
         windowsWidth = displayMetrics.widthPixels;
 
-        originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);
+        originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
         Matrix matrix = new Matrix();
         matrix.setScale(0.66f, 0.66f);
         originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
@@ -113,7 +113,7 @@ public class MapImageView extends ImageView{
 //        System.out.println("x = " + x + ", y = " + y);
         if (isLeft_Right){
             int midX = (x + windowsWidth) % originBitmapWidth;
-            System.out.println("mid = " + midX);
+//            System.out.println("mid = " + midX);
             leftBitmap = Bitmap.createBitmap(originBitmap, x, y, (originBitmapWidth - x), windowsHeight);
             rightBitmap = Bitmap.createBitmap(originBitmap, 0, y, midX, windowsHeight);
 
