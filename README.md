@@ -1,2 +1,2 @@
 # AndroidBasicGame
-MapImageView 可滑动加载大图片（不断刷新bitmap，性能比较烂）
+[![](https://jitpack.io/v/wpy1998/AndroidBasicGame.svg)](https://jitpack.io/#wpy1998/AndroidBasicGame)
