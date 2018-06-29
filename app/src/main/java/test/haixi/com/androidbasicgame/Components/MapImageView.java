@@ -24,12 +24,27 @@ import test.haixi.com.androidbasicgame.R;
 
 @SuppressLint("AppCompatCustomView")
 public class MapImageView extends ImageView{
+    /*
+    * the design of the component
+    * MapImageView()->initImageView();
+    * across the broadcast
+    * initOriginBitmap()->setAction();
+    *
+    * my thinking is first load a big bitmap to originBitmap
+    * by touching the screen get the X and Y
+    * then change the window's X and Y to the current bitmapX and bitmapY
+    * the by the bitmapX/Y cut the bitmap from originBitmap
+    *
+    * my aim is to avoid the oom, but there still many problem remain to be solved
+    * now only support the move of the big image
+    * then will come true the scale of the image
+    * */
     private Bitmap originBitmap, leftBitmap, rightBitmap, bitmap;
     private ViewTreeObserver observer;
     private IntentFilter intentFilter;
     private MapImageViewBroadcast mapImageViewBroadcast;
 
-    private static int mapImageViewBroadcastCode = 0;//第几个mapImageView
+    private static int mapImageViewBroadcastCode = 0;//account the number of  all mapImageViews
     private int windowsWidth, windowsHeight, originBitmapWidth, originBitmapHeight, x = 0, y = 0;
     private boolean isLeft_Right = false, isMeasureWH = false;
     private String intentActionLoadImage, intentActionDestroyImage,
@@ -46,13 +61,16 @@ public class MapImageView extends ImageView{
     }
 
     @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        Intent intent = new Intent(intentActionDestroyImage);
-        getContext().sendBroadcast(intent);
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus == false){//lose the focus from the window
+            Intent intent = new Intent(intentActionDestroyImage);
+            getContext().sendBroadcast(intent);
+        }
     }
 
-    public void initImageView(){
+    //initMapImageView get the width and height
+    private void initImageView(){
         intentActionDestroyImage = intentAction + "." + mapImageViewBroadcastCode + ".destroyImage";
         intentActionLoadImage = intentAction + "." + mapImageViewBroadcastCode + ".loadImage";
         mapImageViewBroadcastCode++;
@@ -86,7 +104,14 @@ public class MapImageView extends ImageView{
     }
 
     int curX = 0, curY = 0, dX = 0, dY = 0;
-    public void setAction(){
+    /*
+        bitmapX/Y != windowX/Y , the function calculateX/Y will change them to the right type
+        dx; x before the movement;
+        dy; x before the movement;
+        curX; x after the movement;
+        curY; x after the movement;
+    */
+    private void setAction(){
         this.setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -122,8 +147,19 @@ public class MapImageView extends ImageView{
         });
     }
 
-    public void calculateWidth(int curX){
-//        System.out.println("curX = " + curX);
+    //init the originBitmap's width and height( will use the windowWidth)
+    private void initOriginBitmap(){
+        originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
+        Matrix matrix = new Matrix();
+        matrix.setScale(0.66f, 0.66f);
+        originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
+                0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
+        originBitmapWidth = originBitmap.getWidth();
+        originBitmapHeight = originBitmap.getHeight();
+    }
+
+    //calculate the right x of the image, only used by setAction()
+    private void calculateWidth(int curX){
         x = x + curX;
         if (x >= 0 && x <= (originBitmapWidth - windowsWidth)){
             isLeft_Right = false;
@@ -131,11 +167,10 @@ public class MapImageView extends ImageView{
             x = (x + originBitmapWidth) % originBitmapWidth;
             isLeft_Right = true;
         }
-//        System.out.println("x = " + x);
     }
 
-    public void calculateHeight(int curY){
-//        System.out.println("curY = " + curY);
+    //calculate the right y of the image, only used by setAction()
+    private void calculateHeight(int curY){
         y = y + curY;
         if (y < 0){
             y = 0;
@@ -143,9 +178,9 @@ public class MapImageView extends ImageView{
             y = originBitmapHeight - windowsHeight;
         }else {
         }
-//        System.out.println("y = " + y);
     }
 
+    //change the right bitmap, only used by setAction()
     private void setImage(int x, int y){
         System.out.println("width = " + getWidth() + ", height = " + getHeight());
 //        System.out.println("x = " + x + ", y = " + y);
@@ -181,14 +216,7 @@ public class MapImageView extends ImageView{
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (action.equals(intentActionLoadImage)){
-                originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
-                Matrix matrix = new Matrix();
-                matrix.setScale(0.66f, 0.66f);
-                originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
-                        0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
-                originBitmapWidth = originBitmap.getWidth();
-                originBitmapHeight = originBitmap.getHeight();
-
+                initOriginBitmap();
                 setImage(x, y);
                 setAction();
             }else if (action.equals(intentActionDestroyImage)){
