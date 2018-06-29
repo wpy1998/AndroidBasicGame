@@ -1,4 +1,4 @@
-package test.haixi.com.androidbasicgame.Components;
+package test.haixi.com.library;
 
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
@@ -9,18 +9,14 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
-import android.graphics.Rect;
 import android.os.Build;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.util.AttributeSet;
-import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
-
-import test.haixi.com.androidbasicgame.R;
 
 @SuppressLint("AppCompatCustomView")
 public class MapImageView extends ImageView{
