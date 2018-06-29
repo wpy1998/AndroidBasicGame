@@ -39,14 +39,15 @@ public class MapImageView extends ImageView{
     * now only support the move of the big image
     * then will come true the scale of the image
     * */
-    private Bitmap originBitmap, leftBitmap, rightBitmap, bitmap;
+    private Bitmap originBitmap, bitmap;
     private ViewTreeObserver observer;
     private IntentFilter intentFilter;
     private MapImageViewBroadcast mapImageViewBroadcast;
 
     private static int mapImageViewBroadcastCode = 0;//account the number of  all mapImageViews
     private int windowsWidth, windowsHeight, originBitmapWidth, originBitmapHeight, x = 0, y = 0;
-    private boolean isLeft_Right = false, isMeasureWH = false;
+    private float certificationScale = 0.66f;
+    private boolean isMeasureWH = false;
     private String intentActionLoadImage, intentActionDestroyImage,
             intentAction = "test.haixi.com.androidbasicgame.Components.MapImageView";
 
@@ -149,23 +150,35 @@ public class MapImageView extends ImageView{
 
     //init the originBitmap's width and height( will use the windowWidth)
     private void initOriginBitmap(){
-        originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
+        Bitmap bitmap1 = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
+        originBitmapWidth = bitmap1.getWidth();
+        originBitmapHeight = bitmap1.getHeight();
+        originBitmap = Bitmap.createBitmap((int) (windowsWidth / certificationScale  + originBitmapWidth),
+                originBitmapHeight,
+                Bitmap.Config.ARGB_8888);
+        Bitmap windowBitmap = Bitmap.createBitmap(bitmap1, 0, 0, (int) (windowsWidth / certificationScale), originBitmapHeight);
+
+        Canvas canvas = new Canvas(originBitmap);
+        canvas.drawBitmap(bitmap1, 0, 0, null);
+        canvas.drawBitmap(windowBitmap, bitmap1.getWidth(), 0, null);
+//        System.out.println("width = " + originBitmap.getWidth() + ", height = " + originBitmap.getHeight());
+
         Matrix matrix = new Matrix();
-        matrix.setScale(0.66f, 0.66f);
-        originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
+        matrix.setScale(certificationScale, certificationScale);
+        originBitmap = Bitmap.createBitmap(originBitmap,
                 0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
         originBitmapWidth = originBitmap.getWidth();
         originBitmapHeight = originBitmap.getHeight();
+//        System.out.println("originBitmapWidth = " + originBitmapWidth + ", originBitmapHeight = " + originBitmapHeight);
     }
 
     //calculate the right x of the image, only used by setAction()
     private void calculateWidth(int curX){
         x = x + curX;
-        if (x >= 0 && x <= (originBitmapWidth - windowsWidth)){
-            isLeft_Right = false;
-        }else {
-            x = (x + originBitmapWidth) % originBitmapWidth;
-            isLeft_Right = true;
+        if (x < 0){
+            x = x + (originBitmapWidth - windowsWidth);
+        }else if (x >= (originBitmapWidth - windowsWidth)){
+            x = x - (originBitmapWidth - windowsWidth);
         }
     }
 
@@ -182,31 +195,8 @@ public class MapImageView extends ImageView{
 
     //change the right bitmap, only used by setAction()
     private void setImage(int x, int y){
-        System.out.println("width = " + getWidth() + ", height = " + getHeight());
 //        System.out.println("x = " + x + ", y = " + y);
-        if (isLeft_Right){
-            int midX = (x + windowsWidth) % originBitmapWidth;
-//            System.out.println("mid = " + midX);
-            leftBitmap = Bitmap.createBitmap(originBitmap, x, y, (originBitmapWidth - x), windowsHeight);
-            rightBitmap = Bitmap.createBitmap(originBitmap, 0, y, midX, windowsHeight);
-
-            leftBitmap = Bitmap.createBitmap(originBitmap, x, y,
-                    (originBitmapWidth - x), windowsHeight);
-            rightBitmap = Bitmap.createBitmap(originBitmap, 0, y,
-                    midX, windowsHeight);
-            if (leftBitmap.getWidth() == windowsWidth){
-                bitmap = leftBitmap;
-            }else if (rightBitmap.getWidth() == windowsWidth){
-                bitmap = rightBitmap;
-            }else {
-                bitmap = Bitmap.createBitmap((int) windowsWidth, windowsHeight, Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bitmap);
-                canvas.drawBitmap(leftBitmap, 0, 0, null);
-                canvas.drawBitmap(rightBitmap, leftBitmap.getWidth(), 0, null);
-            }
-        }else {
-            bitmap = Bitmap.createBitmap(originBitmap, x, y, windowsWidth, windowsHeight);
-        }
+        bitmap = Bitmap.createBitmap(originBitmap, x, y, windowsWidth, windowsHeight);
         this.setImageBitmap(bitmap);
     }
 
