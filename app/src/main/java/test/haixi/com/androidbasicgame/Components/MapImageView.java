@@ -1,51 +1,88 @@
 package test.haixi.com.androidbasicgame.Components;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Rect;
+import android.os.Build;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 
 import test.haixi.com.androidbasicgame.R;
 
 @SuppressLint("AppCompatCustomView")
 public class MapImageView extends ImageView{
-    Bitmap originBitmap, leftBitmap, rightBitmap, bitmap;
-    DisplayMetrics displayMetrics;
+    private Bitmap originBitmap, leftBitmap, rightBitmap, bitmap;
+    private ViewTreeObserver observer;
+    private IntentFilter intentFilter;
+    private MapImageViewBroadcast mapImageViewBroadcast;
 
-    int windowsWidth, windowsHeight, originBitmapWidth, originBitmapHeight, x = 0, y = 0;
-    boolean isLeft_Right = false;
+    private static int mapImageViewBroadcastCode = 0;//第几个mapImageView
+    private int windowsWidth, windowsHeight, originBitmapWidth, originBitmapHeight, x = 0, y = 0;
+    private boolean isLeft_Right = false, isMeasureWH = false;
+    private String intentActionLoadImage, intentActionDestroyImage,
+            intentAction = "test.haixi.com.androidbasicgame.Components.MapImageView";
 
     public MapImageView(Context context) {
         super(context);
+        initImageView();
     }
 
     public MapImageView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
+        initImageView();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        Intent intent = new Intent(intentActionDestroyImage);
+        getContext().sendBroadcast(intent);
     }
 
     public void initImageView(){
-        displayMetrics = getContext().getResources().getDisplayMetrics();
-        windowsHeight = displayMetrics.heightPixels;
-        windowsWidth = displayMetrics.widthPixels;
+        intentActionDestroyImage = intentAction + "." + mapImageViewBroadcastCode + ".destroyImage";
+        intentActionLoadImage = intentAction + "." + mapImageViewBroadcastCode + ".loadImage";
+        mapImageViewBroadcastCode++;
 
-        originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
-        Matrix matrix = new Matrix();
-        matrix.setScale(0.66f, 0.66f);
-        originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
-                0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
-        originBitmapWidth = originBitmap.getWidth();
-        originBitmapHeight = originBitmap.getHeight();
+        intentFilter = new IntentFilter();
+        mapImageViewBroadcast = new MapImageViewBroadcast();
+        intentFilter.addAction(intentActionDestroyImage);
+        intentFilter.addAction(intentActionLoadImage);
+        getContext().registerReceiver(mapImageViewBroadcast, intentFilter);
 
-        setImage(x, y);
+        observer = getRootView().getViewTreeObserver();
+
+        observer.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+            @Override
+            public void onGlobalLayout() {
+                if (observer.isAlive()){
+                    observer.removeOnGlobalLayoutListener(this);
+                }
+                if (isMeasureWH){
+                    return;
+                }
+                isMeasureWH = false;
+                windowsWidth = getMeasuredWidth();
+                windowsHeight = getMeasuredHeight();
+                System.out.println("width = " + getMeasuredWidth() + ", height = " + getMeasuredHeight());
+                Intent intent = new Intent(intentActionLoadImage);
+                getContext().sendBroadcast(intent);
+            }
+        });
     }
 
     int curX = 0, curY = 0, dX = 0, dY = 0;
@@ -110,6 +147,7 @@ public class MapImageView extends ImageView{
     }
 
     private void setImage(int x, int y){
+        System.out.println("width = " + getWidth() + ", height = " + getHeight());
 //        System.out.println("x = " + x + ", y = " + y);
         if (isLeft_Right){
             int midX = (x + windowsWidth) % originBitmapWidth;
@@ -135,5 +173,27 @@ public class MapImageView extends ImageView{
             bitmap = Bitmap.createBitmap(originBitmap, x, y, windowsWidth, windowsHeight);
         }
         this.setImageBitmap(bitmap);
+    }
+
+    private class MapImageViewBroadcast extends BroadcastReceiver{
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(intentActionLoadImage)){
+                originBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
+                Matrix matrix = new Matrix();
+                matrix.setScale(0.66f, 0.66f);
+                originBitmap = Bitmap.createBitmap(BitmapFactory.decodeResource(getContext().getResources(), R.drawable.earth),
+                        0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
+                originBitmapWidth = originBitmap.getWidth();
+                originBitmapHeight = originBitmap.getHeight();
+
+                setImage(x, y);
+                setAction();
+            }else if (action.equals(intentActionDestroyImage)){
+                getContext().unregisterReceiver(this);
+            }
+        }
     }
 }

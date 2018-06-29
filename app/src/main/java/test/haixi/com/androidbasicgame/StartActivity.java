@@ -15,7 +15,5 @@ public class StartActivity extends BasicActivity {
         setContentView(R.layout.activity_start);
 
         mapImageView = findViewById(R.id.mapImageView);
-        mapImageView.initImageView();
-        mapImageView.setAction();
     }
 }
