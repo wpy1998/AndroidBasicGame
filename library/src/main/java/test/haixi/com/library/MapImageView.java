@@ -17,6 +17,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 @SuppressLint("AppCompatCustomView")
 public class MapImageView extends ImageView{
@@ -35,17 +36,18 @@ public class MapImageView extends ImageView{
     * now only support the move of the big image
     * then will come true the scale of the image
     * */
-    private Bitmap originBitmap, bitmap;
+    private Bitmap originBitmap, bitmap, basicBitmap;
     private ViewTreeObserver observer;
     private IntentFilter intentFilter;
     private MapImageViewBroadcast mapImageViewBroadcast;
 
     private static int mapImageViewBroadcastCode = 0;//account the number of  all mapImageViews
     private int windowsWidth, windowsHeight, originBitmapWidth, originBitmapHeight, x = 0, y = 0;
-    private float certificationScale = 0.66f;
-    private boolean isMeasureWH = false;
-    private String intentActionLoadImage, intentActionDestroyImage,
-            intentAction = "test.haixi.com.androidbasicgame.Components.MapImageView";
+    private float certificationScale = 0.66f, minCertificationScale, maxCertificationScale = 2;
+    private boolean isMeasureWH = false, isBroadcastRegister = false;
+    private String intentActionInitImage, intentActionDestroyImage, intentActionMoveImage,
+            intentActionLoadOver = "test.haixi.com.library.MapImageView.loadOver",
+            intentAction = "test.haixi.com.library.MapImageView";
 
     public MapImageView(Context context) {
         super(context);
@@ -63,20 +65,28 @@ public class MapImageView extends ImageView{
         if (hasWindowFocus == false){//lose the focus from the window
             Intent intent = new Intent(intentActionDestroyImage);
             getContext().sendBroadcast(intent);
+        }else {
+            if (isBroadcastRegister == false){
+                isBroadcastRegister = true;
+                registerMapImageViewBroadcast();
+            }
         }
     }
 
     //initMapImageView get the width and height
     private void initImageView(){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                basicBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
+                Intent intent = new Intent(intentActionLoadOver);
+                getContext().sendBroadcast(intent);
+            }
+        }).start();
         intentActionDestroyImage = intentAction + "." + mapImageViewBroadcastCode + ".destroyImage";
-        intentActionLoadImage = intentAction + "." + mapImageViewBroadcastCode + ".loadImage";
+        intentActionInitImage = intentAction + "." + mapImageViewBroadcastCode + ".initImage";
+        intentActionMoveImage = intentAction + "." + mapImageViewBroadcastCode + ".moveImage";
         mapImageViewBroadcastCode++;
-
-        intentFilter = new IntentFilter();
-        mapImageViewBroadcast = new MapImageViewBroadcast();
-        intentFilter.addAction(intentActionDestroyImage);
-        intentFilter.addAction(intentActionLoadImage);
-        getContext().registerReceiver(mapImageViewBroadcast, intentFilter);
 
         observer = getRootView().getViewTreeObserver();
 
@@ -90,23 +100,29 @@ public class MapImageView extends ImageView{
                 if (isMeasureWH){
                     return;
                 }
-                isMeasureWH = false;
+                isMeasureWH = true;
                 windowsWidth = getMeasuredWidth();
                 windowsHeight = getMeasuredHeight();
-                System.out.println("width = " + getMeasuredWidth() + ", height = " + getMeasuredHeight());
-                Intent intent = new Intent(intentActionLoadImage);
-                getContext().sendBroadcast(intent);
+//                System.out.println("width = " + getMeasuredWidth() + ", height = " + getMeasuredHeight());
             }
         });
     }
 
-    int curX = 0, curY = 0, dX = 0, dY = 0;
+    int curX = 0, curY = 0, dX = 0, dY = 0, pointNumber = 0;
+    float centerX = -1, centerY = -1, changeX, changeY, averageDistance;
     /*
         bitmapX/Y != windowX/Y , the function calculateX/Y will change them to the right type
+        point = 1
         dx; x before the movement;
         dy; x before the movement;
         curX; x after the movement;
         curY; x after the movement;
+
+        point >= 2
+        centerX: many focus in the screen X
+        centerY: many focus in the screen Y
+        changeX: after the center changed X
+        changeY: after the center changed Y
     */
     private void setAction(){
         this.setOnTouchListener(new OnTouchListener() {
@@ -114,27 +130,92 @@ public class MapImageView extends ImageView{
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 switch (motionEvent.getAction()){
                     case MotionEvent.ACTION_DOWN:
+                        pointNumber = 1;
                         dX = (int) motionEvent.getX();
                         dY = (int) motionEvent.getY();
                         curX = dX;
                         curY = dY;
                         break;
                     case MotionEvent.ACTION_MOVE:
-                        curX = (int) motionEvent.getX();
-                        curY = (int) motionEvent.getY();
-                        calculateWidth(dX - curX);
-                        calculateHeight(dY - curY);
-//                        System.out.println("dX = " + dX + ", dY = " + dY + ", curX = " + curX + ", curY = " + curY);
-                        setImage(x, y);
-                        dX = curX; dY = curY;
+                        int pNumber;
+                        pNumber = motionEvent.getPointerCount();
+                        if (pNumber == 1){
+                            curX = (int) motionEvent.getX();
+                            curY = (int) motionEvent.getY();
+                            if (Math.abs(curX - dX) <= 1 && Math.abs(curY - dY) <= 1){//极小x,y忽略
+                                pointNumber = pNumber;
+                                break;
+                            }
+
+                            if (centerX >= 0 && centerY >= 0){//两个手指一个离开情况屏幕不动
+                                dX = (int) motionEvent.getX();
+                                dY = (int) motionEvent.getY();
+                                centerX = -1;
+                                centerY = -1;
+                                pointNumber = pNumber;
+                                break;
+                            }
+
+                            calculateWidth(dX - curX);
+                            calculateHeight(dY - curY);
+                            Intent intent = new Intent(intentActionMoveImage);
+                            getContext().sendBroadcast(intent);
+
+                        }else if (pNumber >= 2){
+                            calculateChangeXY(motionEvent);
+                            if (centerX < 0 || centerY < 0 || pNumber < pointNumber){
+                                calculateChangeXY(motionEvent);
+                                centerX = changeX;
+                                centerY = changeY;
+                                changeX = -1;
+                                changeY = -1;
+                                pointNumber = pNumber;
+                                break;
+                            }
+
+                            if (Math.abs(centerX - changeX) <= 1 && Math.abs(centerY - changeY) <= 1){
+                                pointNumber = pNumber;
+                                break;
+                            }
+
+                            calculateWidth((int) (centerX - changeX));
+                            calculateHeight((int) (centerY - changeY));
+                            Intent intent = new Intent(intentActionMoveImage);
+                            getContext().sendBroadcast(intent);
+                        }
+                        pointNumber = pNumber;
                         break;
                     case MotionEvent.ACTION_UP:
-                        curX = (int) motionEvent.getX();
-                        curY = (int) motionEvent.getY();
-                        calculateWidth(dX - curX);
-                        calculateHeight(dY - curY);
-                        setImage(x, y);
-                        dX = curX; dY = curY;
+                        pointNumber = 0;
+                        centerX = -1;
+                        centerY = -1;
+                        changeX = -1;
+                        changeY = -1;
+                        break;
+                    case MotionEvent.ACTION_POINTER_DOWN:
+                        System.out.println("action_Pointer_down");
+                        pointNumber = motionEvent.getPointerCount();
+                        calculateChangeXY(motionEvent);
+                        centerX = changeX;
+                        centerY = changeY;
+                        changeX = -1;
+                        changeY = -1;
+                        break;
+                    case MotionEvent.ACTION_POINTER_UP:
+                        pointNumber = motionEvent.getPointerCount();
+                        if (pointNumber <= 1){
+                            centerX = -1;
+                            centerY = -1;
+                            changeX = -1;
+                            changeY = -1;
+                            break;
+                        }
+
+                        calculateChangeXY(motionEvent);
+                        centerX = changeX;
+                        centerY = changeY;
+                        changeX = -1;
+                        changeY = -1;
                         break;
                     default:
                         break;
@@ -144,28 +225,28 @@ public class MapImageView extends ImageView{
         });
     }
 
-    //init the originBitmap's width and height( will use the windowWidth)
-    private void initOriginBitmap(){
-        Bitmap bitmap1 = BitmapFactory.decodeResource(getResources(), R.drawable.earth);//图片
-        originBitmapWidth = bitmap1.getWidth();
-        originBitmapHeight = bitmap1.getHeight();
-        originBitmap = Bitmap.createBitmap((int) (windowsWidth / certificationScale  + originBitmapWidth),
-                originBitmapHeight,
-                Bitmap.Config.ARGB_8888);
-        Bitmap windowBitmap = Bitmap.createBitmap(bitmap1, 0, 0, (int) (windowsWidth / certificationScale), originBitmapHeight);
+    //--------------------------------calculate---------------------------------------------
+    private void calculateChangeXY(MotionEvent event){
+        changeX = 0; changeY = 0;
+        int pNumber = event.getPointerCount();
+        for (int i = 0; i < pNumber; i++){
+            changeX = event.getX(i) + changeX;
+            changeY = event.getY(i) + changeY;
+        }
+        changeX = changeX / pNumber;
+        changeY = changeY / pNumber;
+    }
 
-        Canvas canvas = new Canvas(originBitmap);
-        canvas.drawBitmap(bitmap1, 0, 0, null);
-        canvas.drawBitmap(windowBitmap, bitmap1.getWidth(), 0, null);
-//        System.out.println("width = " + originBitmap.getWidth() + ", height = " + originBitmap.getHeight());
-
-        Matrix matrix = new Matrix();
-        matrix.setScale(certificationScale, certificationScale);
-        originBitmap = Bitmap.createBitmap(originBitmap,
-                0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
-        originBitmapWidth = originBitmap.getWidth();
-        originBitmapHeight = originBitmap.getHeight();
-//        System.out.println("originBitmapWidth = " + originBitmapWidth + ", originBitmapHeight = " + originBitmapHeight);
+    private float calculateAverageDistance(MotionEvent event){
+        float midX, midY, midDistance = 0f;
+        int pNumber = event.getPointerCount();
+        for (int i = 0; i < pNumber; i++){
+            midX = event.getX(i) - centerX;
+            midY = event.getY(i) - centerY;
+            midDistance = (float) Math.sqrt(midX * midX + midY * midY) + midDistance;
+        }
+        midDistance = midDistance / event.getPointerCount();
+        return midDistance;
     }
 
     //calculate the right x of the image, only used by setAction()
@@ -189,6 +270,44 @@ public class MapImageView extends ImageView{
         }
     }
 
+    //------------------------bitmap action------------------------------------------
+    //init the originBitmap's width and height( will use the windowWidth)
+    private void initOriginBitmap(){
+        originBitmapWidth = basicBitmap.getWidth();
+        originBitmapHeight = basicBitmap.getHeight();
+        if (originBitmapWidth < windowsWidth || originBitmapHeight < windowsHeight){
+            Toast.makeText(getContext(), "图片太小无法加载", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        minCertificationScale = windowsWidth / originBitmapWidth;
+        float min2 = windowsHeight / originBitmapHeight;
+        if (min2 > minCertificationScale){
+            minCertificationScale = min2;
+        }
+
+        maxCertificationScale = 2f;
+        System.out.println("min = " + minCertificationScale);
+
+        originBitmap = Bitmap.createBitmap((int) (windowsWidth / certificationScale  + originBitmapWidth),
+                originBitmapHeight,
+                Bitmap.Config.ARGB_8888);
+        Bitmap windowBitmap = Bitmap.createBitmap(basicBitmap, 0, 0, (int) (windowsWidth / certificationScale), originBitmapHeight);
+
+        Canvas canvas = new Canvas(originBitmap);
+        canvas.drawBitmap(basicBitmap, 0, 0, null);
+        canvas.drawBitmap(windowBitmap, basicBitmap.getWidth(), 0, null);
+//        System.out.println("width = " + originBitmap.getWidth() + ", height = " + originBitmap.getHeight());
+
+        Matrix matrix = new Matrix();
+        matrix.setScale(certificationScale, certificationScale);
+        originBitmap = Bitmap.createBitmap(originBitmap,
+                0, 0, originBitmap.getWidth(), originBitmap.getHeight(), matrix, true);
+        originBitmapWidth = originBitmap.getWidth();
+        originBitmapHeight = originBitmap.getHeight();
+//        System.out.println("originBitmapWidth = " + originBitmapWidth + ", originBitmapHeight = " + originBitmapHeight);
+    }
+
     //change the right bitmap, only used by setAction()
     private void setImage(int x, int y){
 //        System.out.println("x = " + x + ", y = " + y);
@@ -196,17 +315,40 @@ public class MapImageView extends ImageView{
         this.setImageBitmap(bitmap);
     }
 
-    private class MapImageViewBroadcast extends BroadcastReceiver{
 
+
+    private void registerMapImageViewBroadcast(){
+        intentFilter = new IntentFilter();
+        mapImageViewBroadcast = new MapImageViewBroadcast();
+        intentFilter.addAction(intentActionDestroyImage);
+        intentFilter.addAction(intentActionInitImage);
+        intentFilter.addAction(intentActionLoadOver);
+        intentFilter.addAction(intentActionMoveImage);
+        getContext().registerReceiver(mapImageViewBroadcast, intentFilter);
+    }
+
+    private class MapImageViewBroadcast extends BroadcastReceiver{
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (action.equals(intentActionLoadImage)){
+            if (action.equals(intentActionInitImage)){
                 initOriginBitmap();
                 setImage(x, y);
+                dX = curX;
+                dY = curY;
                 setAction();
             }else if (action.equals(intentActionDestroyImage)){
                 getContext().unregisterReceiver(this);
+                isBroadcastRegister = false;
+            }else if (action.equals(intentActionLoadOver)){
+                Intent intent1 = new Intent(intentActionInitImage);
+                getContext().sendBroadcast(intent1);
+            }else if (action.equals(intentActionMoveImage)){
+                setImage(x, y);
+                dX = curX;
+                dY = curY;
+                centerX = changeX;
+                centerY = changeY;
             }
         }
     }
